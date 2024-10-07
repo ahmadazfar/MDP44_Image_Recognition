@@ -146,7 +146,7 @@ def predict():
                     break
             if not predictions:
                 predictions_short.sort(key=lambda x: x.get('box_area'), reverse=True)
-                predictions = predictions[-1]
+                predictions = predictions_short[-1]
         elif len(predictions_short) == 0:
             predictions = []
             predictions.append({
