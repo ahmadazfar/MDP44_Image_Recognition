@@ -3,11 +3,19 @@ import numpy as np
 from flask import Flask, request, jsonify
 from ultralytics import YOLO
 from PIL import Image
+import logging
 
 app = Flask(__name__)
 
+
+logging.basicConfig(level=logging.DEBUG,  # Set log level to DEBUG or INFO
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Create a logger object
+logger = logging.getLogger(__name__)
+
 # Load the YOLOv8 model
-model = YOLO('C:/Users/user/MDP/checklist_best.pt')
+model = YOLO('./checklist_best.pt')
 
 name_to_id = {
         "NA": 'NA',
@@ -139,14 +147,18 @@ def predict():
 
             })
         if len(predictions_short) > 1:
+            predictions_short.sort(key=lambda x: x.get('box_area'), reverse=True)
+            predictions_short.sort(key=lambda x: x.get('confidence'), reverse=True)
+            app.logger.debug('The biggers area: ',predictions_short[0].get('class_name'))
+            app.logger.debug('The biggers area: ',predictions_short[0].get('box_area'))
+            app.logger.debug('The biggers area: ',predictions_short[0].get('confidence'))
             predictions = []
             for prediction in predictions_short:
-                if prediction.get('x1') > 250 and prediction.get('x1') < 774:
+                if prediction.get('x1') > 250 and prediction.get('x1') < 400 and prediction.get('class_name') != 'Bullseye' and prediction.get('confidence') > 0.9:
                     predictions.append(prediction)
                     break
             if not predictions:
-                predictions_short.sort(key=lambda x: x.get('box_area'), reverse=True)
-                predictions = predictions_short[-1]
+                predictions = [predictions_short[0]]
         elif len(predictions_short) == 0:
             predictions = []
             predictions.append({
@@ -162,6 +174,90 @@ def predict():
         else:
             predictions = [predictions_short[0]]
         
+        return jsonify(predictions)
+    #box.cls[0].item()
+#name_to_id.get(class_name, 'NA')
+#custom_labels.get(class_name, 'NA')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/predict_week9', methods=['POST'])
+def predict_week9():
+    # Check if an image file is included in the request
+    name_to_id = {
+        "NA": 'NA',
+        "Bullseye": 10,
+        "Right": 38,
+        "Left": 39,
+        "Right Arrow": 38,
+        "Left Arrow": 39,
+    }
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    try:
+        # Read the file as an image
+        img = Image.open(file.stream)
+        
+        # Convert the image to a NumPy array
+        img = np.array(img)
+        
+        # Convert RGB to BGR format (YOLO expects BGR)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        
+        # Run YOLOv8 inference
+        results = model(img)  # This returns a list of Results objects
+
+        result = results[0]   # Access the first Results object
+        
+        # Extract bounding boxes and labels from the results
+        boxes = result.boxes  # Bounding boxes
+        names = result.names  # Class names
+        
+        # Prepare predictions in a list of dictionaries
+        predictions_short = []
+        for box in boxes:
+            class_name = names[int(box.cls[0].item())]
+            boxHt = box.xyxy[0][3].item() - box.xyxy[0][1].item()
+            boxWt = box.xyxy[0][2].item() -  box.xyxy[0][0].item()
+            boxArea = boxHt * boxWt
+            predictions_short.append({
+                "x1": box.xyxy[0][0].item(),
+                "y1": box.xyxy[0][1].item(),
+                "x2": box.xyxy[0][2].item(),
+                "y2": box.xyxy[0][3].item(),
+                "confidence": box.conf[0].item(),
+                "class_id":  name_to_id.get(class_name, 'NA'),
+                "class_name": class_name,
+                "box_area" : boxArea
+
+            })
+        if len(predictions_short) > 1:
+            predictions = []
+            for prediction in predictions_short:
+                if prediction.get('class_name') != 'Bullseye' and prediction.get('class_name') == 'Left' or prediction.get('class_name') == 'Right':
+                    predictions.append(prediction)
+                    break
+        elif len(predictions_short) == 0:
+            predictions = []
+            predictions.append({
+                "x1": 0,
+                "y1": 0,
+                "x2": 0,
+                "y2": 0,
+                "confidence": 0,
+                "class_id":  'NA',
+                "class_name": 'NA',
+                "box_area" : 0
+            })
+        else:
+            predictions = [predictions_short[0]]
         return jsonify(predictions)
     #box.cls[0].item()
 #name_to_id.get(class_name, 'NA')
