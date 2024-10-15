@@ -9,13 +9,13 @@ app = Flask(__name__)
 
 
 logging.basicConfig(level=logging.DEBUG,  # Set log level to DEBUG or INFO
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+)
 
 # Create a logger object
 logger = logging.getLogger(__name__)
 
 # Load the YOLOv8 model
-model = YOLO('./checklist_best.pt')
+model = YOLO('./final_best.pt')
 
 name_to_id = {
         "NA": 'NA',
@@ -112,13 +112,20 @@ def predict():
     try:
         # Read the file as an image
         img = Image.open(file.stream)
-        
+        image_width, image_height = img.size
         # Convert the image to a NumPy array
         img = np.array(img)
         
         # Convert RGB to BGR format (YOLO expects BGR)
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
         
+
+        app.logger.debug("This is the image width: %s ",image_width)
+        app.logger.debug("This is the image height: %s ",image_height)
+        image_center_x = image_width / 2
+        image_center_y = image_height / 2
+        app.logger.debug(image_center_y)
         # Run YOLOv8 inference
         results = model(img)  # This returns a list of Results objects
 
@@ -134,7 +141,10 @@ def predict():
             class_name = names[int(box.cls[0].item())]
             boxHt = box.xyxy[0][3].item() - box.xyxy[0][1].item()
             boxWt = box.xyxy[0][2].item() -  box.xyxy[0][0].item()
+            centerHt = (box.xyxy[0][3].item() + box.xyxy[0][1].item()) /2
+            centerWt = (box.xyxy[0][2].item() +  box.xyxy[0][0].item()) / 2
             boxArea = boxHt * boxWt
+
             predictions_short.append({
                 "x1": box.xyxy[0][0].item(),
                 "y1": box.xyxy[0][1].item(),
@@ -143,20 +153,33 @@ def predict():
                 "confidence": box.conf[0].item(),
                 "class_id":  name_to_id.get(class_name, 'NA'),
                 "class_name": class_name,
-                "box_area" : boxArea
+                "box_area" : boxArea,
+                "centerHt" : centerHt,
+                "centerWt" : centerWt,
+                "dist" : np.sqrt((centerWt - image_center_x) ** 2 + (centerHt - image_center_y) ** 2)
 
             })
         if len(predictions_short) > 1:
-            predictions_short.sort(key=lambda x: x.get('box_area'), reverse=True)
+            predictions_short.sort(key=lambda x: x.get('dist'), reverse=False)
+            #app.logger.debug("First sort")
+            #app.logger.debug(predictions_short)
             predictions_short.sort(key=lambda x: x.get('confidence'), reverse=True)
-            app.logger.debug('The biggers area: ',predictions_short[0].get('class_name'))
-            app.logger.debug('The biggers area: ',predictions_short[0].get('box_area'))
-            app.logger.debug('The biggers area: ',predictions_short[0].get('confidence'))
+            #app.logger.debug("Second sort")
+            #app.logger.debug(predictions_short)
+            predictions_short.sort(key=lambda x: x.get('box_area'), reverse=True)
+            #app.logger.debug("Third sort")
+            #app.logger.debug(predictions_short)
             predictions = []
+            app.logger.debug("Sorted")
+            app.logger.debug(predictions_short)
             for prediction in predictions_short:
-                if prediction.get('x1') > 250 and prediction.get('x1') < 400 and prediction.get('class_name') != 'Bullseye' and prediction.get('confidence') > 0.9:
+                distance = np.sqrt((prediction.get('centerWt') - image_center_x) ** 2 + (prediction.get('centerHt') - image_center_y) ** 2)
+                if abs(image_center_x - prediction.get('centerWt')) < image_width * 0.15 and prediction.get('class_name') != 'Bullseye' and prediction.get('confidence') > 0.7:
+                    app.logger.debug("This is in the loop:")
+                    app.logger.debug(prediction)
                     predictions.append(prediction)
                     break
+                    
             if not predictions:
                 predictions = [predictions_short[0]]
         elif len(predictions_short) == 0:
@@ -173,7 +196,9 @@ def predict():
             })
         else:
             predictions = [predictions_short[0]]
-        
+
+        app.logger.debug("Final to be returned")
+        app.logger.debug(predictions)
         return jsonify(predictions)
     #box.cls[0].item()
 #name_to_id.get(class_name, 'NA')
@@ -266,4 +291,4 @@ def predict_week9():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001)
+    app.run(host='0.0.0.0', port=5001, debug=True)
