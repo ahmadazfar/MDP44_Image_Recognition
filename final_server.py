@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.DEBUG,  # Set log level to DEBUG or INFO
 logger = logging.getLogger(__name__)
 
 # Load the YOLOv8 model
-model = YOLO('./final_best.pt')
+model = YOLO('./updated_final_best.pt')
 
 name_to_id = {
         "NA": 'NA',
