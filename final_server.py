@@ -174,11 +174,17 @@ def predict():
             app.logger.debug(predictions_short)
             for prediction in predictions_short:
                 distance = np.sqrt((prediction.get('centerWt') - image_center_x) ** 2 + (prediction.get('centerHt') - image_center_y) ** 2)
-                if abs(image_center_x - prediction.get('centerWt')) < image_width * 0.15 and prediction.get('class_name') != 'Bullseye' and prediction.get('confidence') > 0.7:
+                """if abs(image_center_x - prediction.get('centerWt')) < image_width * 0.15 and prediction.get('class_name') != 'Bullseye' and prediction.get('confidence') > 0.7:
+                    app.logger.debug("This is in the loop:")
+                    app.logger.debug(prediction)
+                    predictions.append(prediction)
+                    break"""
+                if prediction.get('class_name') != 'Bullseye' and prediction.get('confidence') > 0.7:
                     app.logger.debug("This is in the loop:")
                     app.logger.debug(prediction)
                     predictions.append(prediction)
                     break
+                    
                     
             if not predictions:
                 predictions = [predictions_short[0]]
@@ -194,7 +200,7 @@ def predict():
                 "class_name": 'NA',
                 "box_area" : 0
             })
-        else:
+        elif predictions_short[0].get('class_name') != 'Bullseye':
             predictions = [predictions_short[0]]
 
         app.logger.debug("Final to be returned")
@@ -281,8 +287,11 @@ def predict_week9():
                 "class_name": 'NA',
                 "box_area" : 0
             })
-        else:
+        elif predictions_short[0].get('class_name') != 'Bullseye':
             predictions = [predictions_short[0]]
+
+        app.logger.debug("Final to be returned")
+        app.logger.debug(predictions)
         return jsonify(predictions)
     #box.cls[0].item()
 #name_to_id.get(class_name, 'NA')
